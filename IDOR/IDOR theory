@@ -1,0 +1,57 @@
+1. WHAT IS IDOR (Insecure Direct Object Reference)
+🔍 Definition:
+IDOR happens when:
+An application exposes internal object references (IDs, filenames, keys) without proper authorization checks.
+
+💥 Example:
+GET /api/user?id=1001
+You change:
+GET /api/user?id=1002
+
+➡️ If you see another user’s data → IDOR confirmed
+
+2. ACCESS CONTROL TYPES
+🔄 A. HORIZONTAL PRIVILEGE ESCALATION
+
+🔍 Meaning:
+A. Same role → access other user’s data
+👥 Example:
+You = normal user (user1)
+GET /api/orders?user_id=101
+Change to:
+GET /api/orders?user_id=102
+
+➡️ You see another user’s orders → Horizontal IDOR
+
+B. VERTICAL PRIVILEGE ESCALATION
+🔍 Meaning:
+Lower role → access higher role functionality
+👑 Example:
+Normal user accessing admin endpoint:
+GET /admin/deleteUser?id=1002
+
+➡️ If it works → Vertical escalation
+
+3. WHERE TO FIND IDOR (REAL TARGETS)
+
+You MUST test everywhere data is referenced by ID.
+
+🔥 Common endpoints:
+1. 🔹 User profiles
+GET /api/user/123
+2. 🔹 Orders / payments
+GET /api/orders/567
+3. 🔹 File downloads
+GET /download?file=invoice_123.pdf
+4. 🔹 API requests (VERY COMMON)
+POST /api/update-profile
+{
+  "user_id": 123
+}
+5. 🔹 Password reset / tokens
+GET /reset?user=123
+6. 🔹 Hidden fields
+<input type="hidden" name="user_id" value="123">
+7. 🔹 Mobile APIs (GOLDMINE)
+Android/iOS apps
+JSON-based requests
