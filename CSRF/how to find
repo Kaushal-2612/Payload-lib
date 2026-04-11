@@ -31,6 +31,13 @@ Real-World Example Found
 Bug Bounty Report #4: SaaS platform stored CSRF tokens in Redis with key format csrf:{user_id} but didn't validate that token's user_id matched session user_id. Attacker could register account, get token, and use it on any victim.
 Impact: Mass account takeover affecting 50,000+ users.
 
+Real-World Bug Bounty Examples Summary
+Attack	Platform	Severity	Payout
+Remove token	Social media API	Critical	$5,000
+Change 1 char	E-commerce site	High	$2,500
+Reuse old token	Banking app	Critical	$7,500
+Another user's token	SaaS platform	Critical	$10,000
+
   
   ## Attack #1: Remove Token Entirely
 
