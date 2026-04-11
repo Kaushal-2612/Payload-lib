@@ -1,0 +1,117 @@
+# CSRF Token Manipulation: 4 Critical Test Cases
+
+> If any of these 4 attacks succeed, the CSRF protection is broken.
+
+## The 4 Attack Vectors
+
+| # | Attack | What to Test |
+|---|--------|---------------|
+| 1 | Remove token entirely | Submit request with no token parameter |
+| 2 | Change 1 character | Modify token by 1 byte (e.g., `abc123` → `abc124`) |
+| 3 | Reuse an old token | Use token from previous session/request |
+| 4 | Use another user's token | Steal or guess token from different account |
+
+---
+
+How to Find This Vulnerability
+Step 1: Create two accounts (Account A = attacker, Account B = victim)
+Step 2: Get token from Account A's session:
+http
+GET /settings HTTP/1.1
+Cookie: session=ACCOUNT_A_SESSION
+Response contains: <input name="csrf" value="TOKEN_FROM_A">
+Step 3: Use Account B's session with Account A's token:
+http
+POST /change-email HTTP/1.1
+Cookie: session=ACCOUNT_B_SESSION
+Content-Type: application/json
+{"email": "hacked@evil.com", "csrf": "TOKEN_FROM_A"}
+Step 4: Success if email changes on Account B
+Real-World Example Found
+Bug Bounty Report #4: SaaS platform stored CSRF tokens in Redis with key format csrf:{user_id} but didn't validate that token's user_id matched session user_id. Attacker could register account, get token, and use it on any victim.
+Impact: Mass account takeover affecting 50,000+ users.
+
+  
+  ## Attack #1: Remove Token Entirely
+
+### The Theory
+
+Server should reject requests without a token. If it accepts → token validation is **completely missing** or optional.
+
+### Real-World Test
+
+**Scenario:** Password change form with hidden CSRF token.
+
+**Normal Request:**
+```http
+POST /change-password HTTP/1.1
+Host: victim.com
+Cookie: session=abc123
+Content-Type: application/x-www-form-urlencoded
+
+csrf_token=x7k9m2p4q6r8&new_password=hacked123
+
+Attack #2: Change 1 Character
+The Theory
+
+Server should validate token exactly. If it accepts modified tokens → validation uses weak comparison (e.g., only checks length, or uses strpos() incorrectly).
+Real-World Test
+
+Original Token: a1b2c3d4e5f6g7h8
+
+Modified Tokens to Try:
+text
+
+a1b2c3d4e5f6g7h9     # Last character +1
+a1b2c3d4e5f6g7h7     # Last character -1
+a1b2c3d4e5f6g7hA     # Change case
+a1b2c3d4e5f6g8h8     # Change middle character
+_1b2c3d4e5f6g7h8     # First character changed
+
+real-World Example Found
+Bug Bounty Report #2: E-commerce site used strncmp(token, submitted, strlen(token)) in C code. If submitted token was longer than real token, comparison succeeded after matching the prefix. Changing last character to anything worked.
+Impact: Attacker could change any 1 character and bypass protection.
+
+
+  Attack #3: Reuse an Old Token
+The Theory
+
+Tokens should be single-use or per-session with invalidation. If old tokens work → no token rotation or session binding.
+Real-World Test
+
+Step 1: Capture a legitimate token from previous request
+Step 2: Perform new action using that same token
+Step 3: Check if request succeeds
+Testing Methodology
+http
+
+# Request 1 (Legitimate - Day 1)
+POST /update-profile HTTP/1.1
+Cookie: session=xyz789
+
+csrf_token=OLD_TOKEN_123&name=John
+
+# Request 2 (Attack - Day 2)
+POST /update-profile HTTP/1.1
+Cookie: session=xyz789  # Same session
+
+csrf_token=OLD_TOKEN_123&email=attacker@evil.com
+
+Advanced Test: Cross-Endpoint Token Reuse
+Real-World Example Found
+Bug Bounty Report #3: Banking app issued one token per session but never expired it. Token from login page worked for money transfers hours later. Attacker phished token once → drained account later.
+Impact: Single token leak = permanent account compromise.
+
+
+Attack #4: Use Another User's Valid Token
+The Theory
+
+Tokens must be bound to the user's session. If User A's token works for User B → no session binding.
+Real-World Test
+
+Requirements:
+    Two accounts (attacker@evil.com, victim@target.com)
+    Ability to get token from attacker's account
+
+
+  
