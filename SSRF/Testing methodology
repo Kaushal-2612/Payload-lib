@@ -1,0 +1,38 @@
+Testing Methodology
+Step 1: Identify Potential Parameters
+
+Common Parameter Names:
+text
+
+# Basic
+url, uri, src, source, dest, destination, redirect, return_to, 
+next, continue, callback, webhook, endpoint, target, path, 
+file, document, resource, asset, media, content, data
+
+# Image specific
+image_url, avatar_url, photo_url, profile_pic, logo_url, 
+icon_url, thumbnail, picture, img_src, cover_url
+
+# Import/Export
+import_url, export_url, fetch_url, download_url, upload_url, 
+sync_url, data_source, external_url, remote_url
+
+# Webhook specific
+webhook_url, callback_url, notification_url, hook_url, 
+event_endpoint, alert_url, report_url
+
+# PDF/Report
+pdf_url, report_url, generate_url, print_url, preview_url, 
+screenshot_url, render_url
+
+# Proxy
+proxy_url, forward_url, fetch_url, get_url, load_url, 
+request_url, query_url
+
+# Federation
+metadata_url, sso_url, idp_url, federation_url, discovery_url, 
+openid_configuration, well_known
+
+# File operations
+file_url, path_url, read_url, open_url, include_url, 
+require_url, load_file, get_file
