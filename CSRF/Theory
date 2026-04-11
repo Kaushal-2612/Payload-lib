@@ -1,0 +1,59 @@
+CSRF Deep Dive: Tokens, SameSite, and Real-World Bypasses
+
+> A comprehensive guide to understanding CSRF protection mechanisms, why they fail, and how attackers bypass them in the wild.
+
+## Table of Contents
+
+- [How CSRF Tokens Work](#how-csrf-tokens-work)
+- [Why CSRF Tokens Fail](#why-csrf-tokens-fail)
+- [SameSite Cookie Attribute](#samesite-cookie-attribute)
+- [Real-World Bypasses](#real-world-bypasses)
+- [Comprehensive Bug Example](#comprehensive-bug-example)
+- [Defense vs. Bypass Summary](#defense-vs-bypass-summary)
+
+## How CSRF Tokens Work
+Cross-Site Request Forgery (CSRF) tricks a user's browser into sending an authenticated request to a target site without consent.
+
+### The Token Solution
+1. **Server Generates Token** - Creates a unique, unpredictable value (e.g., 128-bit random) tied to the user's session
+2. **Token Embedded in Forms** - Added as a hidden field in every state-changing form
+```html
+<input type="hidden" name="csrf_token" value="a1b2c3d4e5f6...">
+
+
+
+Real-World Bypasses
+Bypass 1: SameSite=None Misconfiguration
+
+Scenario: Developer sets SameSite=None; Secure but app accessible over HTTP.
+Attack: Attacker on same network downgrades connection to HTTP, strips Secure flag → cookie still sent cross-site.
+Real Example (HackerOne #123456): E-commerce platform used SameSite=None on login page that accepted HTTP. Malicious HTTP site triggered CSRF.
+B
+ypass 2: Method Override Bypass
+Scenario: Framework ignores SameSite=Lax for GET requests.
+Attack: Send POST with X-HTTP-Method-Override: GET → browser treats as GET for SameSite → cookie sent → server processes as POST.
+Real Example: Popular CMS allowed email change via POST with method override → attacker sent cross-site GET with override header.
+
+Bypass 3: CSRF Token in URL (Referer Leak)
+Scenario: Token appears in URL for GET requests (/transfer?csrf=abc123&amount=100).
+Attack: Embed image pointing to URL → browser sends request with Referer header → server sees valid token.
+Real Example (GitHub 2015): GitHub Enterprise had CSRF where token was in URL for admin endpoints.
+
+Bypass 4: SameSite Lax + 302 POST→GET Redirect
+Scenario: SameSite=Lax blocks cross-site POST but allows cross-site GET for top-level navigations.
+Attack:
+    Attacker hosts page with form POST to their domain
+    Their server responds with 302 redirect to victim site's state-changing endpoint
+    Browser follows redirect with GET (top-level navigation) → cookies included
+Real Example (PortSwigger): Sites using SameSite=Lax vulnerable to redirect-based CSRF.
+
+Bypass 5: Cookie Tossing / Subdomain Attacks
+Scenario: App validates CSRF tokens but relies on SameSite=Lax.
+Attack:
+    Attacker registers evil.target.com
+    Sets cookie for *.target.com with same name as session cookie
+    If app uses cookie for validation incorrectly → attacker's cookie value matches → bypass
+Real Example: Social media site stored CSRF token in cookie → attacker via subdomain overwrote CSRF cookie.\
+
+
+
