@@ -1,0 +1,113 @@
+# CSRF Automation Tools: Complete Guide
+
+> Best tools for automated CSRF testing, from beginner to advanced.
+
+## Table of Contents
+
+- [Quick Comparison](#quick-comparison)
+- [Tool #1: CSRF PoC Generator (Burp Suite)](#tool-1-csrf-poc-generator-burp-suite)
+- [Tool #2: XSRFProbe](#tool-2-xsrfprobe)
+- [Tool #3: CRLFuzz](#tool-3-crlfuzz)
+- [Tool #4: Bolt](#tool-4-bolt)
+- [Tool #5: Custom Python Automation](#tool-5-custom-python-automation)
+- [Real-World Automation Workflow](#real-world-automation-workflow)
+- [Best Practices](#best-practices)
+
+---
+
+## Quick Comparison
+
+| Tool | Best For | Speed | Accuracy | Learning Curve |
+|------|----------|-------|----------|----------------|
+| **Burp CSRF PoC** | Manual testing & PoC generation | Medium | High | Low |
+| **XSRFProbe** | Comprehensive scanning | Fast | Medium | Medium |
+| **CRLFuzz** | Header injection + CSRF | Fast | Medium | Low |
+| **Bolt** | Full automation suite | Very Fast | High | High |
+| **Custom Python** | Specific use cases | Variable | Very High | High |
+
+---
+
+## Tool #1: CSRF PoC Generator (Burp Suite)
+### Best for: Generating proof-of-concept HTML attacks
+### Installation
+Burp Suite already includes this. No separate installation needed.
+**Download Burp Suite:**
+```bash
+# Linux
+wget https://portswigger.net/burp/releases/download?product=community&version=2023.12.1&type=Linux
+# Run
+java -jar burp_community_linux_v2023_12_1.sh
+
+
+Tool #2: XSRFProbe
+Best for: Comprehensive CSRF scanning
+Installation
+bash
+# Method 1: pip (Recommended)
+pip3 install xsrfprobe
+# Method 2: From source
+git clone https://github.com/0xInfection/XSRFProbe.git
+cd XSRFProbe
+python3 setup.py install
+# Method 3: Docker
+docker pull 0xinfection/xsrfprobe
+
+Basic Usage
+bash
+# Scan single URL
+xsrfprobe -u https://target.com/transfer -m POST -d "amount=1000&to=attacker"
+# Scan with cookie
+xsrfprobe -u https://target.com/settings -c "sessionid=abc123"
+# Scan entire site (crawl mode)
+xsrfprobe -u https://target.com --crawl
+# Output to file
+xsrfprobe -u https://target.com/api -o csrf_report.json
+# Verbose mode for debugging
+xsrfprobe -u https://target.com --verbose
+
+Advanced Configuration
+bash
+# Scan with custom headers
+xsrfprobe -u https://target.com/change-email \
+  -H "X-Requested-With: XMLHttpRequest" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"attacker@evil.com"}'
+# Use proxy (Burp Suite)
+xsrfprobe -u https://target.com --proxy http://127.0.0.1:8080
+# Thread count for speed
+xsrfprobe -u https://target.com --threads 20
+# Test specific CSRF vectors only
+xsrfprobe -u https://target.com --test-methods token-removal,token-manipulation
+
+
+Tool #3: CRLFuzz
+Best for: Header injection + CSRF chain attacks
+Installation
+bash
+# Go installation required first
+# Install Go: https://golang.org/dl/
+# Install CRLFuzz
+go install -v github.com/dwisiswant0/crlfuzz/cmd/crlfuzz@latest
+# Verify installation
+crlfuzz --version
+Basic Usage
+bash
+# Single URL scan
+crlfuzz -u "https://target.com/transfer?amount=1000"
+# Read from file
+crlfuzz -l urls.txt
+# Output results
+crlfuzz -u "https://target.com" -o results.txt
+# Use custom headers
+crlfuzz -u "https://target.com" -H "User-Agent: CRLFuzz" -H "X-Custom: test"
+# Threading for speed
+crlfuzz -l urls.txt -t 50
+CSRF-Specific Usage
+bash
+
+# Test for Host header injection (can lead to CSRF)
+crlfuzz -u "https://target.com" -p "Host: attacker.com%0d%0aX-Custom:"
+# Test for Referer bypass
+crlfuzz -u "https://target.com" -H "Referer: https://attacker.com"
+# Test with CRLF injection for CSRF token leak
+crlfuzz -u "https://target.com/api/transfer" -d "amount=1000%0d%0aCSRF-Token:"
