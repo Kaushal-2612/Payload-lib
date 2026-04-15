@@ -1,0 +1,48 @@
+How to test XXE (step-by-step)
+
+Find XML input
+Content-Type: application/xml
+SOAP APIs
+File uploads (SVG, XML)
+
+
+Send basic payload:
+<!DOCTYPE test [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>
+
+Check response:
+If file content appears → vulnerable
+
+Try SSRF:
+http://169.254.169.254/
+
+
+⚠️ Real-world impact
+Read sensitive files
+Access internal APIs
+Steal cloud credentials
+Remote code execution (rare cases)
+
+
+🛡️ Prevention (important for interviews)
+Disable DTD processing
+Disable external entities
+Use secure XML parsers
+Validate input
+
+
+🧩 Quick cheat sheet
+
+Attack	Payload
+File read	file:///etc/passwd
+SSRF	http://169.254.169.254/
+Blind XXE	external server
+No DOCTYPE	XInclude
+
+🔥 Final mindset
+
+👉 XXE is not just file read
+👉 It is a gateway to:
+
+SSRF
+Cloud compromise
+Internal network access
